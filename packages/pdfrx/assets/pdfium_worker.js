@@ -140,7 +140,7 @@ const Pdfium = {
     if (n < 128) {
       target.push(n);
     } else {
-      target.push(n % 128 | 128, n >> 7);
+      target.push((n % 128) | 128, n >> 7);
     }
   },
   sigToWasmTypes: (sig) => {
@@ -987,7 +987,7 @@ function loadPagesProgressively(params) {
  * @returns {{pages: PdfPage[], missingFonts: FontQueries}}
  */
 function reloadPages(params) {
-  const { docHandle, pageIndices } = params;
+  const { docHandle, pageIndices, currentPagesCount } = params;
   /** @type {PdfPage[]} */
   const pages = [];
   const pageCount = Pdfium.wasmExports.FPDF_GetPageCount(docHandle);
@@ -2048,12 +2048,12 @@ function createDocumentFromJpegData(params) {
   // Set image transformation matrix to fill the page
   const setMatrixResult = Pdfium.wasmExports.FPDFImageObj_SetMatrix(
     imageObj,
-    width,  // a (horizontal scaling)
-    0,      // b (horizontal skewing)
-    0,      // c (vertical skewing)
+    width, // a (horizontal scaling)
+    0, // b (horizontal skewing)
+    0, // c (vertical skewing)
     height, // d (vertical scaling)
-    0,      // e (horizontal translation)
-    0       // f (vertical translation)
+    0, // e (horizontal translation)
+    0 // f (vertical translation)
   );
 
   if (!setMatrixResult) {
@@ -2132,19 +2132,7 @@ function _setImageObjPixels(pageHandle, imageObj, pixels, pixelWidth, pixelHeigh
  * }} params
  */
 function insertText(params) {
-  const {
-    docHandle,
-    pageIndex,
-    text,
-    fontSize,
-    x,
-    y,
-    anchorX,
-    anchorY,
-    rotation,
-    textColor,
-    fontName,
-  } = params;
+  const { docHandle, pageIndex, text, fontSize, x, y, anchorX, anchorY, rotation, textColor, fontName } = params;
 
   let textUtf16 = StringUtils.allocateUTF16(text);
   let fontNameUtf8 = StringUtils.allocateUTF8(fontName);
@@ -2173,22 +2161,29 @@ function insertText(params) {
       throw new Error(`FPDFText_SetText failed (${_getErrorMessage(error)})`);
     }
 
-    const a = (textColor >> 24) & 0xFF;
-    const r = (textColor >> 16) & 0xFF;
-    const g = (textColor >> 8) & 0xFF;
-    const b = textColor & 0xFF;
+    const a = (textColor >> 24) & 0xff;
+    const r = (textColor >> 16) & 0xff;
+    const g = (textColor >> 8) & 0xff;
+    const b = textColor & 0xff;
 
     if (Pdfium.wasmExports.FPDFPageObj_SetFillColor(textHandle, r, g, b, a) == 0) {
       throw PdfException('FPDFPageObj_SetFillColor failed.');
     }
-
 
     let ax, ay;
 
     const boundsSize = 64;
     const boundsWrite = Pdfium.wasmExports.malloc(boundsSize);
     try {
-      if (Pdfium.wasmExports.FPDFPageObj_GetBounds(textHandle, boundsWrite, boundsWrite + 4, boundsWrite + 8, boundsWrite + 12) == 0) {
+      if (
+        Pdfium.wasmExports.FPDFPageObj_GetBounds(
+          textHandle,
+          boundsWrite,
+          boundsWrite + 4,
+          boundsWrite + 8,
+          boundsWrite + 12
+        ) == 0
+      ) {
         throw PdfException('could not determine text bounds');
       }
       const boundsView = new Float32Array(Pdfium.memory.buffer, boundsWrite, 4);
@@ -2210,7 +2205,7 @@ function insertText(params) {
       -sinR,
       cosR,
       x - ax * cosR + ay * sinR,
-      y - ax * sinR - ay * cosR,
+      y - ax * sinR - ay * cosR
     );
 
     Pdfium.wasmExports.FPDFPage_InsertObject(pageHandle, textHandle);
@@ -2540,11 +2535,11 @@ class StringUtils {
   static allocateUTF16(str) {
     if (str == null) return 0;
 
-    const size = str.length * 2 + 1;
+    const size = (str.length + 1) * 2;
     const ptr = Pdfium.wasmExports.malloc(size);
     const view = new DataView(Pdfium.memory.buffer, ptr, size);
     for (let i = 0; i < str.length; i++) view.setUint16(i * 2, str.charCodeAt(i), true);
-    view.setUint8(str.length * 2, 0);
+    view.setUint16(str.length * 2, 0, true); // write two null bytes
     return ptr;
   }
   /**
