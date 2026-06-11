@@ -176,6 +176,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver, Single
                           }
                         },
                 ),
+                IconButton(
+                  visualDensity: visualDensity,
+                  icon: const Icon(Icons.text_fields),
+                  tooltip: 'Insert text on current page',
+                  onPressed: documentRef == null ? null : () => _showInsertTextDialog(),
+                ),
               ],
             );
           },
@@ -780,6 +786,110 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver, Single
       passwordProvider: () => passwordDialog(context),
       useProgressiveLoading: useProgressiveLoading,
     );
+  }
+
+  Future<void> _showInsertTextDialog() async {
+    if (!controller.isReady) return;
+    final currentPageNumber = controller.pageNumber ?? 1;
+    final currentPage = controller.pages[currentPageNumber - 1];
+
+    final pageCtrl = TextEditingController(text: '$currentPageNumber');
+    final textCtrl = TextEditingController(text: 'Hello!');
+    final xCtrl = TextEditingController(text: (currentPage.width / 2).toStringAsFixed(1));
+    final yCtrl = TextEditingController(text: (currentPage.height / 2).toStringAsFixed(1));
+    final sizeCtrl = TextEditingController(text: '24');
+    final colorCtrl = TextEditingController(text: 'FF000000');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Insert text'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: pageCtrl,
+                decoration: InputDecoration(labelText: 'Page (1–${controller.pageCount})'),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: textCtrl,
+                decoration: const InputDecoration(labelText: 'Text'),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: xCtrl,
+                      decoration: const InputDecoration(labelText: 'X'),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: yCtrl,
+                      decoration: const InputDecoration(labelText: 'Y'),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: sizeCtrl,
+                decoration: const InputDecoration(labelText: 'Font size'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: colorCtrl,
+                decoration: const InputDecoration(labelText: 'Color (AARRGGBB hex)', hintText: 'FF000000'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Insert')),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final pageNumber = (int.tryParse(pageCtrl.text) ?? currentPageNumber).clamp(1, controller.pageCount);
+    final page = controller.pages[pageNumber - 1];
+    final x = double.tryParse(xCtrl.text) ?? page.width / 2;
+    final y = double.tryParse(yCtrl.text) ?? page.height / 2;
+    final fontSize = double.tryParse(sizeCtrl.text) ?? 24.0;
+    final colorHex = colorCtrl.text.replaceAll('#', '');
+    final color = int.tryParse(colorHex, radix: 16) ?? 0xFF000000;
+
+    try {
+      await page.insertText(
+        text: textCtrl.text,
+        fontSize: fontSize,
+        x: x,
+        y: y,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        textColor: color,
+      );
+
+      await controller.document.reloadPages(pageNumbersToReload: [page.pageNumber]);
+      await controller.document.assemble();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Inserted text on page $pageNumber')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('insertText failed: $e')));
+      }
+    }
   }
 
   static String? _fileName(String? path) {

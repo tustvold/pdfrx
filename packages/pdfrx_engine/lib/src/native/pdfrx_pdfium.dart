@@ -833,11 +833,11 @@ class _PdfDocumentPdfium extends PdfDocument {
       }, (docAddress: document.address, pageNumbersToReload: pageNumbersToReload, currentPageCount: _pages.length));
 
       final newPages = [..._pages];
-      for (var i = 0; i < results.pages.length; i++) {
-        final pageData = results.pages[i];
+      for (final pageData in results.pages) {
+        final pageNumber = pageData.pageIndex + 1;
         final newPage = _PdfPagePdfium._(
           document: this,
-          pageNumber: i + 1,
+          pageNumber: pageNumber,
           width: pageData.width,
           height: pageData.height,
           rotation: PdfPageRotation.values[pageData.rotation],
@@ -845,8 +845,8 @@ class _PdfDocumentPdfium extends PdfDocument {
           bbBottom: pageData.bbBottom,
           isLoaded: true,
         );
-        if (i < newPages.length) {
-          newPages[i] = newPage;
+        if (pageData.pageIndex < newPages.length) {
+          newPages[pageData.pageIndex] = newPage;
         } else {
           newPages.add(newPage);
         }
